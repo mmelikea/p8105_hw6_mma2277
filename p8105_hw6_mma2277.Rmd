@@ -310,7 +310,7 @@ modelr::add_predictions(child_birthweight, myproposal_mod)
 ```
 
 
-Show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+#### Show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
 
 ```{r}
 child_birthweight|>
@@ -324,6 +324,7 @@ child_birthweight|>
     y = "Residuals"
   )
 ```
+
 
 
 #### Compare your model to two others:
@@ -377,4 +378,8 @@ cv_df |>
   mutate(model = fct_inorder(model)) |> 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
+
+#### Explanations for comparison of the models:
+Based on these results, third model which is birth weight as an outcome and head circumference, length, sex, and all interactions (including the three-way interaction) as a predictor has the lowest rmse. I would go with third model because it is better model. 
+
 
