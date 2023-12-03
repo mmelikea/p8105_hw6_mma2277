@@ -146,8 +146,7 @@ boot_sample = function(df) {
   sample_frac(df, replace = TRUE)
 }
 
-
-rsquared_df<- weather_df |> 
+rsquared_df <- weather_df |> 
   modelr::bootstrap(n = 5000) |> 
   mutate(
     models = map(strap, ~lm(tmax ~ tmin + prcp, data = .x)),
@@ -168,7 +167,10 @@ rsquared_df |>
 
 
 ```
- 
+
+##### Explanations:
+The plot is slightly left-skewed and it peaks around 0.91. 95% CI for 2.5% and 97.5% quantiles lies between 0.89 and 0.94.
+
 #### Extracting logb , creting plot and finding 2.5% and 97.5% quantiles to provide a 95% confidence interval for logb
 ```{r}
 logb_df <- weather_df |> 
@@ -201,10 +203,10 @@ logb_df |>
 
 ```
 
+##### Explanations:
+The plot is left skewed and peaks around -5.5.  95% CI for 2.5% and 97.5% quantiles lies between -8.89 and -4.60.
 
 ## Problem 3
-
-Problem 3
 In this problem, you will analyze data gathered to understand the effects of several variables on a child’s birthweight. This dataset, available here, consists of roughly 4000 children and includes the following variables:
 
 babysex: baby’s sex (male = 1, female = 2)
@@ -254,8 +256,6 @@ numeric_vars_to_convert <- c("babysex", "frace", "malform", "mrace")
 
 child_birthweight <- child_birthweight |> 
   mutate(across(all_of(numeric_vars_to_convert), as.factor))
-
-
 ```
  
  
@@ -274,7 +274,7 @@ if (any_NA) {
 #### Propose a regression model for birthweight.
 ##### Model 1:
 ```{r}
-model1_myproposal = lm(bwt ~ mrace + momage + parity + gaweeks + smoken, data = child_birthweight)
+myproposal_mod = lm(bwt ~ mrace + momage + parity + gaweeks + smoken, data = child_birthweight)
 ```
 
 Describe your modeling process: I decided to use linear regression model with birthweight is outcome and mother's race, mom age, gestational age in weeks, number of live births prior to this pregnancy, and average number of cigarettes smoked per day during pregnancy as my predictors. Based on my quick research, I determined that these variables might be a important predictors that affect birthweight of the baby. My model is based on hypothesized structure for the factors that underly birthweight.
@@ -283,17 +283,17 @@ Describe your modeling process: I decided to use linear regression model with bi
 #### Tidying output
 
 ```{r}
-model1_myproposal |> 
+myproposal_mod |> 
   broom::glance()
 ```
 
 ```{r}
-model1_myproposal |> 
+myproposal_mod |> 
   broom::tidy()
 ```
 
 ```{r}
-model1_myproposal |> 
+myproposal_mod|> 
   broom::tidy() |> 
   select(term, estimate, p.value) |> 
   knitr::kable(digits = 3)
@@ -301,29 +301,80 @@ model1_myproposal |>
 
 #### Adding residuals
 ```{r}
-modelr::add_residuals(child_birthweight, model1_myproposal)
+modelr::add_residuals(child_birthweight, myproposal_mod)
 ```
 
 #### Adding predictions
 ```{r}
-modelr::add_predictions(child_birthweight, model1_myproposal)
+modelr::add_predictions(child_birthweight, myproposal_mod)
 ```
 
 
 Show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
 
+```{r}
+child_birthweight|>
+  modelr::add_residuals(myproposal_mod) |> 
+  modelr::add_predictions(myproposal_mod) |> 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  labs(
+    title = "Residuals vs Fitted values",
+    x = "Fitted values",
+    y = "Residuals"
+  )
+```
 
 
 #### Compare your model to two others:
 
 ##### Model 2: One using length at birth and gestational age as predictors (main effects only)
 ```{r}
-model2= lm(bwt ~ blength+gaweeks, data = child_birthweight)
+second_mod= lm(bwt ~ blength+gaweeks, data = child_birthweight)
 ```
 
 
 ##### Model 3: One using head circumference, length, sex, and all interactions (including the three-way interactions
 ```{r}
-model3= lm(bwt ~ bhead+blength+babysex+bhead*blength+bhead*babysex+blength*babysex+bhead*blength*babysex, data = child_birthweight)
+third_mod= lm(bwt ~ bhead+blength+babysex+bhead*blength+bhead*babysex+blength*babysex+bhead*blength*babysex, data = child_birthweight)
+```
+
+
+```{r}
+cv_df = 
+  crossv_mc(child_birthweight, 100) 
+
+cv_df =
+  cv_df |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+
+cv_df <- 
+  cv_df |> 
+  dplyr::mutate(
+    myproposal_mod  = map(train, \(df) lm(bwt ~ mrace + momage + parity + gaweeks + smoken, data = df)),
+    second_mod      = map(train, \(df) lm(bwt ~ blength + gaweeks, data = df)),
+    third_mod      = map(train, \(df) lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = df))
+  ) |> 
+  dplyr::mutate(
+    rmse_myproposal = map2_dbl(myproposal_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_second      = map2_dbl(second_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_third       = map2_dbl(third_mod, test, \(mod, df) rmse(model = mod, data = df))
+  )
+
+
+```
+
+```{r}
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
 
