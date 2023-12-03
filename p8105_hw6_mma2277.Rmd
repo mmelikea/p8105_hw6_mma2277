@@ -140,24 +140,38 @@ Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of 
 . Note: broom::glance() is helpful for extracting r̂ 2
  from a fitted regression, and broom::tidy() (with some additional wrangling) should help in computing log(β̂ 1∗β̂ 2)
  
- 
+#### Extracting r squared , creting plot and finding 2.5% and 97.5% quantiles to provide a 95% confidence interval for r squared
 ```{r}
 boot_sample = function(df) {
   sample_frac(df, replace = TRUE)
 }
 
 
-weather_df |> 
+rsquared_df<- weather_df |> 
   modelr::bootstrap(n = 5000) |> 
   mutate(
     models = map(strap, ~lm(tmax ~ tmin + prcp, data = .x)),
     results = map(models, broom::glance)) |>  
   select(-strap, -models) |> 
-  unnest(results) |> 
-  ggplot(aes(x = r.squared)) + geom_density()
+  unnest(results) 
+  
+#creating the plot
+ggplot(rsquared_df,aes(x = r.squared)) + geom_density()
+
+# CI for 2.5% and 97.5% quantiles
+rsquared_df |> 
+                summarize(
+                ci_lower = quantile(r.squared, 0.025),
+                ci_upper = quantile(r.squared, 0.975)
+                ) |> 
+  knitr::kable(digits = 3)
 
 
-weather_df |> 
+```
+ 
+#### Extracting logb , creting plot and finding 2.5% and 97.5% quantiles to provide a 95% confidence interval for logb
+```{r}
+logb_df <- weather_df |> 
   modelr::bootstrap(n = 5000) |> 
   mutate(
     models = map(strap, ~lm(tmax ~ tmin+prcp, data = .x) ),
@@ -169,12 +183,23 @@ weather_df |>
     names_from = term, 
     values_from = estimate) |> 
   rename(beta1 = tmin, beta2 = prcp) |> 
-  mutate(log_b = log(beta1*beta2)) |> 
-  ggplot(aes(x = log_b)) + geom_density()
+  mutate(log_b = log(beta1*beta2)) 
+
+#creating the plot:
+ggplot(logb_df, aes(x = log_b)) + geom_density()
+
+
+# CI for 2.5% and 97.5% quantiles
+logb_df |> 
+       filter(!is.na(log_b)) |> 
+                summarize(
+                ci_lower = quantile(log_b, 0.025),
+                ci_upper = quantile(log_b, 0.975)
+                ) |> 
+  knitr::kable(digits = 3)
 
 
 ```
- 
 
 
 ## Problem 3
@@ -230,8 +255,6 @@ numeric_vars_to_convert <- c("babysex", "frace", "malform", "mrace")
 child_birthweight <- child_birthweight |> 
   mutate(across(all_of(numeric_vars_to_convert), as.factor))
 
-class(child_birthweight$babysex)
-levels(child_birthweight$babysex)
 
 ```
  
