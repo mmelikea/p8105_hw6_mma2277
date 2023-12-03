@@ -139,116 +139,43 @@ Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of 
  
 . Note: broom::glance() is helpful for extracting r̂ 2
  from a fitted regression, and broom::tidy() (with some additional wrangling) should help in computing log(β̂ 1∗β̂ 2)
-
+ 
+ 
 ```{r}
-# weather_df = 
-#   modelr::bootstrap(n = 5000) |> 
-#   mutate(
-#     models = map(strap, \(df) lm(tmax ~ tmin + prcp, data = weather_df)),
-#     results = map(models, broom::tidy)) |> 
-#   select(results) |> 
-#   unnest(results) |> 
-#   ggplot(aes(x = estimate)) + geom_density()
-```
-
-## Defining our bootstrap sample
-```{r}
-# n_samp = 250
-# 
-# sim_df_const = 
-#   tibble(
-#     x = rnorm(n_samp, 1, 1),
-#     error = rnorm(n_samp, 0, 1),
-#     y = 2 + 3 * x + error
-#   )
-# 
-# sim_df_nonconst = sim_df_const |> 
-#   mutate(
-#   error = error * .75 * x,
-#   y = 2 + 3 * x + error
-# )
-# 
-# boot_straps = 
-#   tibble(strap_number = 1:5000) |> 
-#   mutate(
-#     strap_sample = map(strap_number, \(i) boot_sample(df = sim_df_nonconst))
-#   )
-# boot_straps
-
-```
-
-```{r}
-num_bootstraps <- 5000
-
-# Create an empty matrix to store bootstrap results
-# bootstrap_results <- matrix(NA, nrow = num_bootstraps, ncol = 2)
-# 
-# for (i in 1:num_bootstraps) {
-#   # Sample with replacement from the original data
-#   bootstrap_sample <- data[sample(nrow(data), replace = TRUE), ]
-#   
-#   # Fit the model on the bootstrap sample
-#   bootstrap_model <- lm(tmax ~ tmin + prcp, data = bootstrap_sample)
-#   
-#   # Extract R-squared from the fitted model
-#   r_squared <- glance(bootstrap_model)$r.squared
-#   
-#   # Extract the product of coefficients and take the logarithm
-#   log_beta_product <- log(tidy(bootstrap_model)$estimate[2] * tidy(bootstrap_model)$estimate[3])
-#   
-#   # Store the results in the matrix
-#   bootstrap_results[i, ] <- c(r_squared, log_beta_product)
-# }
-
-```
-
-
-
-```{r}
-# boot_results <- tibble(strap_number = 1:5000) %>%
-#   mutate(
-#     strap_sample = map(strap_number, ~boot_straps(df)),  # Adjust the function call
-#     models = map(strap_sample, ~lm(tmax ~ tmin + prcp, data = .)),  # Use ~ to refer to the dataframe
-#     results = map(models, tidy)
-#   ) %>%
-#   select(results) %>%
-#   unnest(results)
-# 
-# boot_results |> 
-#   ggplot(aes(x = estimate)) + 
-#   geom_density()
-```
-
-```{r}
-# Define the function to extract the quantities of interest from the linear regression model
-boot_function <- function(weather_df, indices) {
-  bootstrap_data <- weather_df[indices, ]   # Subseting the data using the bootstrap indices
-  model <- lm(tmax ~ tmin + prcp, data = bootstrap_data)   # Fit the linear regression model 
-  r_squared <- summary(model)$r.squared # Quantity 1: R-squared
-  log_beta_product <- log(coef(model)["tmin"] * coef(model)["prcp"])# Quantity 2: log(beta1 * beta2)
-  return(c(r_squared, log_beta_product))
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE)
 }
-# Set the seed for reproducibility
-set.seed(123)
 
-# Number of bootstrap samples
-num_bootstrap_samples <- 5000
 
-# Perform the bootstrap
-bootstrap_results <- boot(data = weather_df, statistic = boot_function, R = num_bootstrap_samples)
+weather_df |> 
+  modelr::bootstrap(n = 5000) |> 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin + prcp, data = .x)),
+    results = map(models, broom::glance)) |>  
+  select(-strap, -models) |> 
+  unnest(results) |> 
+  ggplot(aes(x = r.squared)) + geom_density()
 
-# Plot the distributions of the quantities of interest
-par(mfrow = c(1, 2))  # Create a 1x2 layout for two plots
-hist(bootstrap_results$t[, 1], main = "Distribution of R-squared", xlab = "R-squared")
-hist(bootstrap_results$t[, 2], main = "Distribution of log(beta1 * beta2)", xlab = "log(beta1 * beta2)")
 
-# Describe the distributions
-# You can use summary(bootstrap_results) to get summary statistics
+weather_df |> 
+  modelr::bootstrap(n = 5000) |> 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin+prcp, data = .x) ),
+    results = map(models, broom::tidy)) |> 
+  select(-strap, -models) |> 
+  unnest(results) |> 
+  select(id = `.id`, term, estimate) |> 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) |> 
+  rename(beta1 = tmin, beta2 = prcp) |> 
+  mutate(log_b = log(beta1*beta2)) |> 
+  ggplot(aes(x = log_b)) + geom_density()
 
-# Calculate 95% confidence intervals
-conf_intervals <- boot.ci(bootstrap_results, type = "bca", index = c(1, 2))
-conf_intervals
+
 ```
+ 
+
 
 ## Problem 3
 
@@ -327,7 +254,41 @@ if (any_NA) {
 model1_myproposal = lm(bwt ~ mrace + momage + parity + gaweeks + smoken, data = child_birthweight)
 ```
 
-Describe your modeling process: I decided to use linear regression model with birthweight is outcome and mother's race, mom age, gestational age in weeks, number of live births prior to this pregnancy, and average number of cigarettes smoked per day during pregnancy as my predictors. Based on my quick research, I determined that these variables might be a important predictors that affect birthweight of the baby. 
+Describe your modeling process: I decided to use linear regression model with birthweight is outcome and mother's race, mom age, gestational age in weeks, number of live births prior to this pregnancy, and average number of cigarettes smoked per day during pregnancy as my predictors. Based on my quick research, I determined that these variables might be a important predictors that affect birthweight of the baby. My model is based on hypothesized structure for the factors that underly birthweight.
+
+
+#### Tidying output
+
+```{r}
+model1_myproposal |> 
+  broom::glance()
+```
+
+```{r}
+model1_myproposal |> 
+  broom::tidy()
+```
+
+```{r}
+model1_myproposal |> 
+  broom::tidy() |> 
+  select(term, estimate, p.value) |> 
+  knitr::kable(digits = 3)
+```
+
+#### Adding residuals
+```{r}
+modelr::add_residuals(child_birthweight, model1_myproposal)
+```
+
+#### Adding predictions
+```{r}
+modelr::add_predictions(child_birthweight, model1_myproposal)
+```
+
+
+Show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+
 
 
 #### Compare your model to two others:
